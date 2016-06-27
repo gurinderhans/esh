@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"fmt"
+	"path"
 	"bytes"
 	"strings"
 	"syscall"
@@ -72,7 +73,14 @@ func UseSession(sessionName string) {
 }
 
 func ChangeSessionDir(toDir string) {
-	CurrentSession().WorkingDir = toDir
+	sess := CurrentSession()
+	
+	prevPath := sess.WorkingDir
+	if string(toDir[0]) == "/" {
+		prevPath = "/"
+	}
+	
+	sess.WorkingDir = path.Join(prevPath, toDir)
 }
 
 func ListSavedSessions() {
