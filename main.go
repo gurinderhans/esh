@@ -7,9 +7,9 @@ import (
 	"bytes"
 	"strings"
 	"syscall"
+	"github.com/tucnak/store"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
-	"github.com/tucnak/store"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
@@ -28,25 +28,34 @@ type ESHSessionConfig struct {
 
 
 var (
-	app 		= kingpin.New("esh", "easy SSH")
+	esh_cli		= kingpin.New("esh", "easy SSH")
 
 	/// ----
-	add 		= app.Command("add", "Adds a SSH session to config.")
-	addname		= add.Arg("name", "Name of session.").Required().String() 
-	serverIP 	= add.Flag("server", "Server address.").Short('h').Required().PlaceHolder("127.0.0.1").String()
+	add 		= esh_cli.Command("add", "Adds a SSH session to config.")
+	addname		= add.Flag("name", "Name of session.").Required().String() 
+	serverIP 	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
 	user 		= add.Flag("user", "Username to connect with.").Short('u').Required().String()
 	port 		= add.Flag("port", "Port to connect to.").Short('p').Default("22").String()
 	keyPath 	= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
 
 	/// -----
-	use 		= app.Command("use", "Use a specific ssh session")
+	use 		= esh_cli.Command("use", "Use a specific ssh session")
 	usename 	= use.Arg("name", "Name of session.").Required().String()
 
 	/// ----
-	listall		= app.Command("list-all", "List all saved SSH sessions.")
+	listall		= esh_cli.Command("list-all", "List all saved SSH sessions.")
 
 	/// ----
-	clear		= app.Command("clear", "List all saved SSH sessions.")
+	clear		= esh_cli.Command("clear", "Clear all saved SSH sessions.")
+
+
+	/// ----
+	get			= esh_cli.Command("get", "Get some file or folder.")
+
+
+	/// ----
+	put			= esh_cli.Command("put", "Put some file or folder.")
+
 )
 
 
@@ -176,7 +185,9 @@ func ParseArgs(args []string) {
 	// command on ssh device
 	if len(args) > 1 {
 		command := args[1]
-		if command != "list-all" && command != "use" && command != "add" && command != "clear" && command != "help" && command != "--help" {
+
+		/// TODO: better way to do this?
+		if command != "list-all" && command != "use" && command != "add" && command != "clear" && command != "get" && command != "put" && command != "help" && command != "--help" {
 			current_sess := CurrentSession()
 			if current_sess != nil {
 				// special case for 'cd' command
@@ -192,7 +203,7 @@ func ParseArgs(args []string) {
 		}
 	}
 
-	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
+	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
 	// Add session
 	case add.FullCommand():
 		AddSession(*addname, *serverIP, *port, *user, *keyPath)
