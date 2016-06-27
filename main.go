@@ -82,7 +82,6 @@ func ListSavedSessions() {
 }
 
 func ClearCurrentSession() {
-	fmt.Println("clear")
 	for _, val := range applicationConfig {
 		val.IsCurrentSession = false
 	}
@@ -168,7 +167,6 @@ func ParseArgs(args []string) {
 	// app commands, and if current session isn't nil either, then execute given
 	// command on ssh device
 	if len(args) > 1 {
-		
 		command := args[1]
 		if command != "list-all" && command != "use" && command != "add" && command != "clear" && command != "help" && command != "--help" {
 			current_sess := CurrentSession()
@@ -178,12 +176,11 @@ func ParseArgs(args []string) {
 					ChangeSessionDir(args[2])
 				} else {
 					ExecuteCommand(args[1:], current_sess)
-					return
 				}
 			} else {
 				fmt.Println("Switch to a session first.")
-				return
 			}
+			return
 		}
 	}
 
