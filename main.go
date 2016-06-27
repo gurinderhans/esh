@@ -30,9 +30,6 @@ var (
 	app 		= kingpin.New("esh", "easy SSH")
 
 	/// ----
-	listall		= app.Command("list-all", "List all saved SSH sessions.")
-
-	/// ----
 	add 		= app.Command("add", "Adds a SSH session to config.")
 	addname		= add.Arg("name", "Name of session.").Required().String() 
 	serverIP 	= add.Flag("server", "Server address.").Short('h').Required().PlaceHolder("127.0.0.1").String()
@@ -44,9 +41,11 @@ var (
 	use 		= app.Command("use", "Use a specific ssh session")
 	usename 	= use.Arg("name", "Name of session.").Required().String()
 
-	/// -----
-	chdir 		= app.Command("cd", "Change working directory")
-	chdirpath	= chdir.Arg("path", "new path").Required().String()
+	/// ----
+	listall		= app.Command("list-all", "List all saved SSH sessions.")
+
+	/// ----
+	clear		= app.Command("clear", "List all saved SSH sessions.")
 )
 
 
@@ -77,9 +76,15 @@ func ChangeSessionDir(toDir string) {
 }
 
 func ListSavedSessions() {
-	fmt.Println("-> All sessions")
 	for i, val := range applicationConfig {
 		fmt.Println((i+1), "-" ,val.Name)
+	}
+}
+
+func ClearCurrentSession() {
+	fmt.Println("clear")
+	for _, val := range applicationConfig {
+		val.IsCurrentSession = false
 	}
 }
 
@@ -101,7 +106,7 @@ func AddSession(name, ip, port, user, keyPath string) {
 		KeyPath: keyPath,
 	}
 
-	if keyPath == "" { // ask for password
+	if new_sess.KeyPath == "" { // keypath wasn't provided, ask for password
 		fmt.Print("Device Password: ")
 		
 		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
@@ -159,13 +164,26 @@ func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
 
 func ParseArgs(args []string) {
 
-	if len(args) > 1 && args[1] != "list-all" && args[1] != "use" && args[1] != "cd" && args[1] != "help" && args[1] != "--help" {
-		if CurrentSession() != nil {
-			// run custom command
-			ExecuteCommand(args[1:], applicationConfig[0])
-			return
-		} else {
-			// fmt.Println("Current session is `nil`. Try `esh use <name>`.")
+	// check if theres is an `arg[1..n]` and if that arg is not one of the registered
+	// app commands, and if current session isn't nil either, then execute given
+	// command on ssh device
+	if len(args) > 1 {
+		
+		command := args[1]
+		if command != "list-all" && command != "use" && command != "add" && command != "clear" && command != "help" && command != "--help" {
+			current_sess := CurrentSession()
+			if current_sess != nil {
+				// special case for 'cd' command
+				if command == "cd" {
+					ChangeSessionDir(args[2])
+				} else {
+					ExecuteCommand(args[1:], current_sess)
+					return
+				}
+			} else {
+				fmt.Println("Switch to a session first.")
+				return
+			}
 		}
 	}
 
@@ -177,14 +195,14 @@ func ParseArgs(args []string) {
 	// Use session
 	case use.FullCommand():
 		UseSession(*usename)
-	
-	// Change directory
-	case chdir.FullCommand():
-		ChangeSessionDir(*chdirpath)
 
 	// List all saved sessions
 	case listall.FullCommand():
 		ListSavedSessions()
+
+	// Clear current sessions
+	case clear.FullCommand():
+		ClearCurrentSession()
 	}
 }
 
