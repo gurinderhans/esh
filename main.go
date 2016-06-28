@@ -174,8 +174,15 @@ func ChangeSessionDir(toDir string) {
 }
 
 func ListSavedSessions() {
+	
+	current_sess := CurrentSession()
+
 	for i, val := range applicationConfig {
-		fmt.Println((i+1), "-" ,val.Name)
+		print_str := fmt.Sprintf("%d - %s", (i+1), val.Name)
+		if current_sess != nil && current_sess.Name == val.Name {
+			print_str = print_str + " " + "*"
+		}
+		fmt.Println(print_str)
 	}
 }
 
