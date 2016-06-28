@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"io"
+	"io/ioutil"
 	"fmt"
 	"path"
 	"bytes"
@@ -12,7 +14,6 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
-
 
 
 type ESHSessionConfig struct {
@@ -51,6 +52,7 @@ var (
 
 	/// ----
 	get			= esh_cli.Command("get", "Get some file or folder.")
+	getpath		= get.Arg("getpath", "Path of file | folder to download.").Required().String()
 
 
 	/// ----
@@ -60,6 +62,83 @@ var (
 
 
 var applicationConfig []*ESHSessionConfig // array holding saved sessions
+
+
+/// MARK: - Core funcs
+
+func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
+	config := &ssh.ClientConfig{
+		User: esh_conf.Username,
+	}
+
+	if esh_conf.KeyPath != "" {
+
+		keyBytes, er := ioutil.ReadFile(esh_conf.KeyPath)
+
+		if er != nil {
+			return
+		}
+
+		signer, er := ssh.ParsePrivateKey(keyBytes)
+		if er != nil {
+			return
+		}
+
+		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
+	} else {
+		config.Auth = []ssh.AuthMethod{ssh.Password(esh_conf.Password)}
+	}
+
+	client, err = ssh.Dial("tcp", esh_conf.Hostname + ":" + esh_conf.Port, config)
+
+	return
+}
+
+
+/// MARK: - GET | PUT funcs
+
+func GetPath(path string) {
+}
+
+func PutPath(path string) {
+	sess, err := MakeLiveSession(CurrentSession())
+	if err != nil {
+		panic("0. Error: " + err.Error())
+	}
+
+	defer sess.Close()
+
+	lfile, err := os.Open("/usr/src/esh/p.zip")
+	if err != nil {
+		panic("1. Error: " + err.Error())
+	}
+
+	lfileStats, err := lfile.Stat()
+	if err != nil {
+		panic("2. Error: " + err.Error())
+	}
+
+	go func() {
+		wrt, _ := sess.StdinPipe()
+
+		fmt.Println("goroutine runnin")
+
+		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
+
+		if lfileStats.Size() > 0 {
+			io.Copy(wrt, lfile)
+			fmt.Fprint(wrt, "\x00")
+			wrt.Close()
+		} else {
+			fmt.Fprint(wrt, "\x00")
+			wrt.Close()
+		}
+	}()
+
+	if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
+		panic("3. Error: " + err.Error())
+	}
+}
 
 
 /// MARK: - Session management funcs
@@ -77,6 +156,8 @@ func UseSession(sessionName string) {
 	for _, val := range applicationConfig {
 		if val.Name == sessionName {
 			val.IsCurrentSession = true
+		} else {
+			val.IsCurrentSession = false
 		}
 	}
 }
@@ -137,22 +218,15 @@ func AddSession(name, ip, port, user, keyPath string) {
 	applicationConfig = append(applicationConfig, new_sess)
 }
 
-func MakeLiveSession(esh_conf *ESHSessionConfig) (session *ssh.Session, err error) {
-	
-	config := &ssh.ClientConfig{
-		User: esh_conf.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(esh_conf.Password), // TODO: deal with key
-		},
-	}
+func MakeLiveSession(esh_conf *ESHSessionConfig) (session *ssh.Session, err error) {	
 
-	conn, err := ssh.Dial("tcp", esh_conf.Hostname + ":" + esh_conf.Port, config)
+	client, err := MakeSSHClient(esh_conf)
 
 	if err != nil {
 		return
 	}
 
-	session, err = conn.NewSession()
+	session, err = client.NewSession()
 
 	return
 }
@@ -164,12 +238,12 @@ func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
 	cmd := strings.Join(cmd_args, " ")
 
 	session, err := MakeLiveSession(esh_conf)
-	defer session.Close()
 
 	if err != nil {
 		panic("Error: " + err.Error())
-		return
 	}
+
+	defer session.Close()
 
 	var stdoutBuf bytes.Buffer
     session.Stdout = &stdoutBuf
@@ -204,21 +278,27 @@ func ParseArgs(args []string) {
 	}
 
 	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
-	// Add session
-	case add.FullCommand():
-		AddSession(*addname, *serverIP, *port, *user, *keyPath)
+		// Add session
+		case add.FullCommand():
+			AddSession(*addname, *serverIP, *port, *user, *keyPath)
 
-	// Use session
-	case use.FullCommand():
-		UseSession(*usename)
+		// Use session
+		case use.FullCommand():
+			UseSession(*usename)
 
-	// List all saved sessions
-	case listall.FullCommand():
-		ListSavedSessions()
+		// List all saved sessions
+		case listall.FullCommand():
+			ListSavedSessions()
 
-	// Clear current sessions
-	case clear.FullCommand():
-		ClearCurrentSession()
+		// Clear current sessions
+		case clear.FullCommand():
+			ClearCurrentSession()
+
+		case get.FullCommand():
+			GetPath(*getpath)
+
+		case put.FullCommand():
+			PutPath("")
 	}
 }
 
