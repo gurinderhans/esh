@@ -8,6 +8,9 @@ esh use <name> - use this session
 esh ls
 esh pwd
 
+#cheap way of downloading a single file
+esh cat file.ext > file.ext
+
 # SCP stuff
 esh get <file|folder> // fetches into current local working dir
 esh put <local_file|local_folder> <online_dir>
