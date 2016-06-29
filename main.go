@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"io"
 	"io/ioutil"
 	"fmt"
 	"path"
@@ -103,44 +104,57 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 func GetPath(path string) {
 }
 
+
+type UploadProgressTracker struct{
+	Length int64
+	Uploaded int
+}
+
+func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
+	pt.Uploaded += len(data)
+	fmt.Printf("\rUploaded => %.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
+	return len(data), nil
+}
+
 func PutPath(path string) {
-	// sess, err := MakeLiveSession(CurrentSession())
-	// if err != nil {
-	// 	panic("0. Error: " + err.Error())
-	// }
+	sess, err := MakeLiveSession(CurrentSession())
+	if err != nil {
+		panic("0. Error: " + err.Error())
+	}
 
-	// defer sess.Close()
+	defer sess.Close()
 
-	// lfile, err := os.Open("/usr/src/esh/p.zip")
-	// if err != nil {
-	// 	panic("1. Error: " + err.Error())
-	// }
+	lfile, err := os.Open("/usr/src/esh/scrap/p.zip")
+	if err != nil {
+		panic("1. Error: " + err.Error())
+	}
 
-	// lfileStats, err := lfile.Stat()
-	// if err != nil {
-	// 	panic("2. Error: " + err.Error())
-	// }
+	lfileStats, err := lfile.Stat()
+	if err != nil {
+		panic("2. Error: " + err.Error())
+	}
 
-	// go func() {
-	// 	wrt, _ := sess.StdinPipe()
+	r2 := io.TeeReader(lfile, &UploadProgressTracker{Length: lfileStats.Size()})
 
-	// 	fmt.Println("goroutine runnin")
+	go func() {
+		wrt, _ := sess.StdinPipe()
 
-	// 	fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
+		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
 
-	// 	if lfileStats.Size() > 0 {
-	// 		io.Copy(wrt, lfile)
-	// 		fmt.Fprint(wrt, "\x00")
-	// 		wrt.Close()
-	// 	} else {
-	// 		fmt.Fprint(wrt, "\x00")
-	// 		wrt.Close()
-	// 	}
-	// }()
+		if lfileStats.Size() > 0 {
+			io.Copy(wrt, r2)
+			fmt.Fprint(wrt, "\x00")
+			wrt.Close()
+		} else {
+			fmt.Fprint(wrt, "\x00")
+			wrt.Close()
+		}
+	}()
 
-	// if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
-	// 	panic("3. Error: " + err.Error())
-	// }
+	if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
+		panic("3. Error: " + err.Error())
+	}
+	fmt.Println()
 }
 
 
