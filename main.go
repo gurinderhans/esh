@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"io"
 	"io/ioutil"
 	"fmt"
 	"path"
@@ -47,7 +46,11 @@ var (
 	listall		= esh_cli.Command("list-all", "List all saved SSH sessions.")
 
 	/// ----
-	clear		= esh_cli.Command("clear", "Clear all saved SSH sessions.")
+	logout		= esh_cli.Command("logout", "Logout from current session.")
+
+	/// ----
+	remove		= esh_cli.Command("remove", "Remove a given session with name.")
+	removename 	= remove.Arg("name", "Name of session to remove.").Required().String()
 
 
 	/// ----
@@ -101,43 +104,43 @@ func GetPath(path string) {
 }
 
 func PutPath(path string) {
-	sess, err := MakeLiveSession(CurrentSession())
-	if err != nil {
-		panic("0. Error: " + err.Error())
-	}
+	// sess, err := MakeLiveSession(CurrentSession())
+	// if err != nil {
+	// 	panic("0. Error: " + err.Error())
+	// }
 
-	defer sess.Close()
+	// defer sess.Close()
 
-	lfile, err := os.Open("/usr/src/esh/p.zip")
-	if err != nil {
-		panic("1. Error: " + err.Error())
-	}
+	// lfile, err := os.Open("/usr/src/esh/p.zip")
+	// if err != nil {
+	// 	panic("1. Error: " + err.Error())
+	// }
 
-	lfileStats, err := lfile.Stat()
-	if err != nil {
-		panic("2. Error: " + err.Error())
-	}
+	// lfileStats, err := lfile.Stat()
+	// if err != nil {
+	// 	panic("2. Error: " + err.Error())
+	// }
 
-	go func() {
-		wrt, _ := sess.StdinPipe()
+	// go func() {
+	// 	wrt, _ := sess.StdinPipe()
 
-		fmt.Println("goroutine runnin")
+	// 	fmt.Println("goroutine runnin")
 
-		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
+	// 	fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
 
-		if lfileStats.Size() > 0 {
-			io.Copy(wrt, lfile)
-			fmt.Fprint(wrt, "\x00")
-			wrt.Close()
-		} else {
-			fmt.Fprint(wrt, "\x00")
-			wrt.Close()
-		}
-	}()
+	// 	if lfileStats.Size() > 0 {
+	// 		io.Copy(wrt, lfile)
+	// 		fmt.Fprint(wrt, "\x00")
+	// 		wrt.Close()
+	// 	} else {
+	// 		fmt.Fprint(wrt, "\x00")
+	// 		wrt.Close()
+	// 	}
+	// }()
 
-	if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
-		panic("3. Error: " + err.Error())
-	}
+	// if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
+	// 	panic("3. Error: " + err.Error())
+	// }
 }
 
 
@@ -186,10 +189,22 @@ func ListSavedSessions() {
 	}
 }
 
-func ClearCurrentSession() {
+func LogoutCurrentSession() {
 	for _, val := range applicationConfig {
 		val.IsCurrentSession = false
 	}
+}
+
+func RemoveSession(name string) {
+	var deleteIndex int
+	for i, val := range applicationConfig {
+		if val.Name == name {
+			deleteIndex = i
+			break
+		}
+	}
+
+	applicationConfig = append(applicationConfig[:deleteIndex], applicationConfig[deleteIndex+1:]...)
 }
 
 func AddSession(name, ip, port, user, keyPath string) {
@@ -268,7 +283,7 @@ func ParseArgs(args []string) {
 		command := args[1]
 
 		/// TODO: better way to do this?
-		if command != "list-all" && command != "use" && command != "add" && command != "clear" && command != "get" && command != "put" && command != "help" && command != "--help" {
+		if command != "list-all" && command != "use" && command != "add" && command != "logout" && command != "remove" && command != "get" && command != "put" && command != "help" && command != "--help" {
 			current_sess := CurrentSession()
 			if current_sess != nil {
 				// special case for 'cd' command
@@ -285,21 +300,21 @@ func ParseArgs(args []string) {
 	}
 
 	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
-		// Add session
+
 		case add.FullCommand():
 			AddSession(*addname, *serverIP, *port, *user, *keyPath)
 
-		// Use session
 		case use.FullCommand():
 			UseSession(*usename)
 
-		// List all saved sessions
 		case listall.FullCommand():
 			ListSavedSessions()
 
-		// Clear current sessions
-		case clear.FullCommand():
-			ClearCurrentSession()
+		case logout.FullCommand():
+			LogoutCurrentSession()
+
+		case remove.FullCommand():
+			RemoveSession(*removename)
 
 		case get.FullCommand():
 			GetPath(*getpath)
