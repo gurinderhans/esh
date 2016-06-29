@@ -315,7 +315,7 @@ func ParseArgs(args []string) {
 		command := args[1]
 
 		/// TODO: better way to do this?
-		if command != "list-all" && command != "use" && command != "add" && command != "logout" && command != "remove" && command != "get" && command != "put" && command != "help" && command != "--help" {
+		if command != "list-all" && command != "use" && command != "add" && command != "logout" && command != "remove" && command != "get" && command != "put" && command != "help" && command != "--help" && command != "-h" {
 			current_sess := CurrentSession()
 			if current_sess != nil {
 				// special case for 'cd' command
@@ -357,6 +357,9 @@ func ParseArgs(args []string) {
 }
 
 func main() {
+	// add support for -h flag
+	esh_cli.HelpFlag.Short('h')
+
 	store.SetApplicationName("esh")
 
 	// load config, errors are ignored for now as config file may not exist on first program run
