@@ -28,6 +28,12 @@ type ESHSessionConfig struct {
 }
 
 
+type UploadProgressTracker struct{
+	Length int64
+	Uploaded int
+}
+
+
 var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
 
@@ -102,12 +108,22 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 /// MARK: - GET | PUT funcs
 
 func GetPath(path string) {
-}
+	results := make(chan string)
 
+	numTimes := 2
 
-type UploadProgressTracker struct{
-	Length int64
-	Uploaded int
+	for i := 0; i < numTimes; i++ {
+		go func (idx int) {
+			results <- PutPath("", idx)
+		}(i+1)
+	}
+
+	for i := 0; i < numTimes; i++ {
+		select {
+		case res := <-results:
+			fmt.Println(res)
+		}
+	}
 }
 
 func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
@@ -116,7 +132,7 @@ func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
-func PutPath(path string) {
+func PutPath(path string, idz int) string {
 	sess, err := MakeLiveSession(CurrentSession())
 	if err != nil {
 		panic("0. Error: " + err.Error())
@@ -155,6 +171,8 @@ func PutPath(path string) {
 		panic("3. Error: " + err.Error())
 	}
 	fmt.Println()
+
+	return fmt.Sprintf("%d", idz)
 }
 
 
@@ -334,7 +352,7 @@ func ParseArgs(args []string) {
 			GetPath(*getpath)
 
 		case put.FullCommand():
-			PutPath("")
+			PutPath("", 0)
 	}
 }
 
