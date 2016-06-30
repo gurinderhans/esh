@@ -34,6 +34,7 @@ type UploadProgressTracker struct{
 	Length int64
 	Uploaded int
 	Name string
+	pbar *pb.ProgressBar
 }
 
 
@@ -73,7 +74,6 @@ var (
 	putpath 	= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
-
 
 var applicationConfig []*ESHSessionConfig // array holding saved sessions
 
@@ -116,11 +116,12 @@ func GetPath(path string) {
 
 func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
 	pt.Uploaded += len(data)
+	pt.pbar.Set(pt.Uploaded)
 	// fmt.Printf("\r%.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
 	return len(data), nil
 }
 
-func PutFile(fpath, root string, client *ssh.Client) string {
+func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) string {
 
 	l_sess := CurrentSession()
 	sess, err := client.NewSession()
@@ -139,8 +140,10 @@ func PutFile(fpath, root string, client *ssh.Client) string {
 		panic("Error: " + err.Error())
 	}
 
-	// cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: fpath }
-	// progressbarreader := io.TeeReader(lfile, cprog)
+	cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: fpath, pbar: prbar }
+	progressbarreader := io.TeeReader(lfile, cprog)
+	// bar := pb.StartNew(int(lfileStats.Size())).SetUnits(pb.U_BYTES).Prefix("Prefix")
+	// pb.New(200).Prefix("First ")
 
 	go func() {
 
@@ -149,7 +152,8 @@ func PutFile(fpath, root string, client *ssh.Client) string {
 		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
 
 		if lfileStats.Size() > 0 {
-			io.Copy(wrt, lfile)
+			// io.Copy(wrt, bar.NewProxyReader(lfile))
+			io.Copy(wrt, progressbarreader)
 			fmt.Fprint(wrt, "\x00")
 			wrt.Close()
 		} else {
@@ -182,25 +186,31 @@ func PutPath(putpath string) {
 		panic("Error: " + err.Error())
 	}
 
+	var progressBars []*pb.ProgressBar
 	var putfiles []string
 	filepath.Walk(putpath, func (fpath string,  info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			putfiles = append(putfiles, fpath)
+			bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES) //.Prefix("Prefix")
+			progressBars = append(progressBars, bar)
 		}
 		return nil
 	})
 
+	pool, _ := pb.StartPool(progressBars...)
+
 	results := make(chan string)
-	for _, fl := range putfiles {
-		go func (fl string) {
-			results <- PutFile(fl, putpath, client)
-		}(fl)
+	for i, fl := range putfiles {
+		go func (fl string, i int) {
+			results <- PutFile(fl, putpath, client, progressBars[i])
+		}(fl, i)
 	}
 
 	// wait for all uploads to finish before exiting
 	for _ = range putfiles {
         <-results
     }
+    pool.Stop()
 
 	// for i := 0; i < len(putfiles); i++ {
 	// 	select {
