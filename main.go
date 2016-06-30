@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"fmt"
 	"path"
+	"path/filepath"
 	"bytes"
 	"strings"
 	"syscall"
@@ -67,6 +68,7 @@ var (
 
 	/// ----
 	put			= esh_cli.Command("put", "Put some file or folder.")
+	putpath 	= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
 
@@ -107,40 +109,26 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 
 /// MARK: - GET | PUT funcs
 
-func GetPath(path string) {
-	results := make(chan string)
-
-	numTimes := 2
-
-	for i := 0; i < numTimes; i++ {
-		go func (idx int) {
-			results <- PutPath("", idx)
-		}(i+1)
-	}
-
-	for i := 0; i < numTimes; i++ {
-		select {
-		case res := <-results:
-			fmt.Println(res)
-		}
-	}
-}
-
 func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
 	pt.Uploaded += len(data)
-	fmt.Printf("\rUploaded => %.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
+	// fmt.Printf("\rUploaded => %.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
 	return len(data), nil
 }
 
-func PutPath(path string, idz int) string {
-	sess, err := MakeLiveSession(CurrentSession())
+func GetPath(path string) {
+	// TODO: implement
+}
+
+func PutFile(fpath, root string) string {
+
+	l_sess := CurrentSession()
+	sess, err := MakeLiveSession(l_sess)
 	if err != nil {
 		panic("0. Error: " + err.Error())
 	}
-
 	defer sess.Close()
 
-	lfile, err := os.Open("/usr/src/esh/scrap/p.zip")
+	lfile, err := os.Open(fpath)
 	if err != nil {
 		panic("1. Error: " + err.Error())
 	}
@@ -167,12 +155,51 @@ func PutPath(path string, idz int) string {
 		}
 	}()
 
-	if err := sess.Run(fmt.Sprintf("scp -t %s", "/home/pi/test/p.zip")); err != nil {
+	fmt.Println("Uploading:",fpath)
+	
+	a_components := strings.Split(root, string(os.PathSeparator))
+	b_components := strings.Split(fpath, string(os.PathSeparator))
+	diffs := b_components[len(a_components)-1:]
+	diffs = append([]string{l_sess.WorkingDir, filepath.Base(root)}, diffs...)
+
+	remotepath := strings.Join(diffs, string(os.PathSeparator))
+
+	folder := path.Dir(remotepath)
+
+	if err := sess.Run(fmt.Sprintf("mkdir -p %s; scp -t %s", folder, remotepath)); err != nil {
 		panic("3. Error: " + err.Error())
 	}
-	fmt.Println()
 
-	return fmt.Sprintf("%d", idz)
+	return fpath
+}
+
+func PutPath(putpath string) {
+	results := make(chan string)
+
+	var putfiles []string
+
+	filepath.Walk(putpath, func (fpath string,  info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			putfiles = append(putfiles, fpath)
+		}
+		return nil
+	})
+
+	// fmt.Println("all uploads:", putfiles)
+
+	for _, fl := range putfiles {
+		go func (fl string) {
+			results <- PutFile(fl, putpath)
+		}(fl)
+	}
+
+	for i := 0; i < len(putfiles); i++ {
+		select {
+		case res := <-results:
+			fmt.Sprintf("%s", res)
+			// fmt.Println(res)
+		}
+	}
 }
 
 
@@ -352,12 +379,12 @@ func ParseArgs(args []string) {
 			GetPath(*getpath)
 
 		case put.FullCommand():
-			PutPath("", 0)
+			PutPath(*putpath)
 	}
 }
 
 func main() {
-	// add support for -h flag
+	// support for -h flag
 	esh_cli.HelpFlag.Short('h')
 
 	store.SetApplicationName("esh")
