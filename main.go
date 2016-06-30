@@ -14,6 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
+	// "gopkg.in/cheggaaa/pb.v1"
 )
 
 
@@ -32,6 +33,7 @@ type ESHSessionConfig struct {
 type UploadProgressTracker struct{
 	Length int64
 	Uploaded int
+	Name string
 }
 
 
@@ -106,47 +108,48 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 	return
 }
 
-
 /// MARK: - GET | PUT funcs
-
-func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
-	pt.Uploaded += len(data)
-	// fmt.Printf("\rUploaded => %.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
-	return len(data), nil
-}
 
 func GetPath(path string) {
 	// TODO: implement
 }
 
-func PutFile(fpath, root string) string {
+func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
+	pt.Uploaded += len(data)
+	// fmt.Printf("\r%.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
+	return len(data), nil
+}
+
+func PutFile(fpath, root string, client *ssh.Client) string {
 
 	l_sess := CurrentSession()
-	sess, err := MakeLiveSession(l_sess)
+	sess, err := client.NewSession()
 	if err != nil {
-		panic("0. Error: " + err.Error())
+		panic("Error: " + err.Error())
 	}
 	defer sess.Close()
 
 	lfile, err := os.Open(fpath)
 	if err != nil {
-		panic("1. Error: " + err.Error())
+		panic("Error: " + err.Error())
 	}
 
 	lfileStats, err := lfile.Stat()
 	if err != nil {
-		panic("2. Error: " + err.Error())
+		panic("Error: " + err.Error())
 	}
 
-	r2 := io.TeeReader(lfile, &UploadProgressTracker{Length: lfileStats.Size()})
+	// cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: fpath }
+	// progressbarreader := io.TeeReader(lfile, cprog)
 
 	go func() {
+
 		wrt, _ := sess.StdinPipe()
 
 		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
 
 		if lfileStats.Size() > 0 {
-			io.Copy(wrt, r2)
+			io.Copy(wrt, lfile)
 			fmt.Fprint(wrt, "\x00")
 			wrt.Close()
 		} else {
@@ -154,8 +157,6 @@ func PutFile(fpath, root string) string {
 			wrt.Close()
 		}
 	}()
-
-	fmt.Println("Uploading:",fpath)
 	
 	a_components := strings.Split(root, string(os.PathSeparator))
 	b_components := strings.Split(fpath, string(os.PathSeparator))
@@ -166,18 +167,22 @@ func PutFile(fpath, root string) string {
 
 	folder := path.Dir(remotepath)
 
-	if err := sess.Run(fmt.Sprintf("mkdir -p %s; scp -t %s", folder, remotepath)); err != nil {
-		panic("3. Error: " + err.Error())
+	// here we escape the path string by wrapping it in quotes, so any space characters dont bite
+	if err := sess.Run(fmt.Sprintf("mkdir -p \"%s\"; scp -t \"%s\"", folder, remotepath)); err != nil {
+		panic("Error: " + err.Error())
 	}
 
 	return fpath
 }
 
 func PutPath(putpath string) {
-	results := make(chan string)
+
+	client, err := MakeSSHClient(CurrentSession())
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
 
 	var putfiles []string
-
 	filepath.Walk(putpath, func (fpath string,  info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			putfiles = append(putfiles, fpath)
@@ -185,21 +190,24 @@ func PutPath(putpath string) {
 		return nil
 	})
 
-	// fmt.Println("all uploads:", putfiles)
-
+	results := make(chan string)
 	for _, fl := range putfiles {
 		go func (fl string) {
-			results <- PutFile(fl, putpath)
+			results <- PutFile(fl, putpath, client)
 		}(fl)
 	}
 
-	for i := 0; i < len(putfiles); i++ {
-		select {
-		case res := <-results:
-			fmt.Sprintf("%s", res)
-			// fmt.Println(res)
-		}
-	}
+	// wait for all uploads to finish before exiting
+	for _ = range putfiles {
+        <-results
+    }
+
+	// for i := 0; i < len(putfiles); i++ {
+	// 	select {
+	// 	case res := <-results:
+	// 		fmt.Sprintf("%s", res)
+	// 	}
+	// }
 }
 
 
