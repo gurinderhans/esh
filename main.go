@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
-	// "gopkg.in/cheggaaa/pb.v1"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 
@@ -179,6 +179,24 @@ func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) stri
 	return fpath
 }
 
+func DispatchUploads(putpath string, client *ssh.Client, putfiles []string, pbars []*pb.ProgressBar) {
+	pool, _ := pb.StartPool(pbars...)
+
+	results := make(chan string)
+	for i, fl := range putfiles {
+		go func (fl string, i int) {
+			results <- PutFile(fl, putpath, client, pbars[i])
+		}(fl, i)
+	}
+
+	// wait for all uploads to finish before exiting
+	for _ = range putfiles {
+        <-results
+    }
+
+    pool.Stop()
+}
+
 func PutPath(putpath string) {
 
 	client, err := MakeSSHClient(CurrentSession())
@@ -197,27 +215,14 @@ func PutPath(putpath string) {
 		return nil
 	})
 
-	pool, _ := pb.StartPool(progressBars...)
-
-	results := make(chan string)
-	for i, fl := range putfiles {
-		go func (fl string, i int) {
-			results <- PutFile(fl, putpath, client, progressBars[i])
-		}(fl, i)
+	// batch uploads of `n`, since opening too many SSH sessions at same time, causes connection disruption
+	for i := 0; i < len(putfiles); i = i + 3 {
+		max_index := i+3
+		if max_index > len(putfiles) {
+			max_index = len(putfiles)
+		}
+		DispatchUploads(putpath, client, putfiles[i:max_index], progressBars[i:max_index])
 	}
-
-	// wait for all uploads to finish before exiting
-	for _ = range putfiles {
-        <-results
-    }
-    pool.Stop()
-
-	// for i := 0; i < len(putfiles); i++ {
-	// 	select {
-	// 	case res := <-results:
-	// 		fmt.Sprintf("%s", res)
-	// 	}
-	// }
 }
 
 
