@@ -5,9 +5,9 @@ import (
 	"io"
 	"io/ioutil"
 	"fmt"
+	"bytes"
 	"path"
 	"path/filepath"
-	"bytes"
 	"strings"
 	"syscall"
 	"github.com/tucnak/store"
@@ -27,14 +27,6 @@ type ESHSessionConfig struct {
 	KeyPath string
 	IsCurrentSession bool
 	WorkingDir string
-}
-
-
-type UploadProgressTracker struct{
-	Length int64
-	Uploaded int
-	Name string
-	pbar *pb.ProgressBar
 }
 
 
@@ -83,6 +75,7 @@ var applicationConfig []*ESHSessionConfig // array holding saved sessions
 func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 	config := &ssh.ClientConfig{
 		User: esh_conf.Username,
+		Auth: []ssh.AuthMethod{ssh.Password(esh_conf.Password)},
 	}
 
 	if esh_conf.KeyPath != "" {
@@ -99,8 +92,6 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 		}
 
 		config.Auth = []ssh.AuthMethod{ssh.PublicKeys(signer)}
-	} else {
-		config.Auth = []ssh.AuthMethod{ssh.Password(esh_conf.Password)}
 	}
 
 	client, err = ssh.Dial("tcp", esh_conf.Hostname + ":" + esh_conf.Port, config)
@@ -108,20 +99,28 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 	return
 }
 
-/// MARK: - GET | PUT funcs
+/// MARK: - GET funcs
 
 func GetPath(path string) {
 	// TODO: implement
 }
 
+/// MARK: - PUT funcs
+
+type UploadProgressTracker struct{
+	Length int64
+	Uploaded int
+	Name string
+	Progress *pb.ProgressBar
+}
+
 func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
 	pt.Uploaded += len(data)
-	pt.pbar.Set(pt.Uploaded)
-	// fmt.Printf("\r%.2f%%", ((float32(pt.Uploaded) / float32(pt.Length))*float32(100)))
+	pt.Progress.Set(pt.Uploaded)
 	return len(data), nil
 }
 
-func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) string {
+func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) string {
 
 	l_sess := CurrentSession()
 	sess, err := client.NewSession()
@@ -130,7 +129,7 @@ func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) stri
 	}
 	defer sess.Close()
 
-	lfile, err := os.Open(fpath)
+	lfile, err := os.Open(putfilepath)
 	if err != nil {
 		panic("Error: " + err.Error())
 	}
@@ -140,19 +139,20 @@ func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) stri
 		panic("Error: " + err.Error())
 	}
 
-	cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: fpath, pbar: prbar }
+	cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: putfilepath, Progress: prbar }
 	progressbarreader := io.TeeReader(lfile, cprog)
-	// bar := pb.StartNew(int(lfileStats.Size())).SetUnits(pb.U_BYTES).Prefix("Prefix")
-	// pb.New(200).Prefix("First ")
+
+	local_file_path_components := strings.Split(putfilepath, string(os.PathSeparator))
+	local_file_name := local_file_path_components[len(local_file_path_components) - 1]
+
 
 	go func() {
 
 		wrt, _ := sess.StdinPipe()
 
-		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), "p.zip")
+		fmt.Fprintln(wrt, "C0644", lfileStats.Size(), local_file_name)
 
 		if lfileStats.Size() > 0 {
-			// io.Copy(wrt, bar.NewProxyReader(lfile))
 			io.Copy(wrt, progressbarreader)
 			fmt.Fprint(wrt, "\x00")
 			wrt.Close()
@@ -161,32 +161,44 @@ func PutFile(fpath, root string, client *ssh.Client, prbar *pb.ProgressBar) stri
 			wrt.Close()
 		}
 	}()
+
+	// since local and remote paths differ and we're not really given a remote path by user,
+	// we compute the remote path here which is the current working directory on remote
 	
-	a_components := strings.Split(root, string(os.PathSeparator))
-	b_components := strings.Split(fpath, string(os.PathSeparator))
-	diffs := b_components[len(a_components)-1:]
-	diffs = append([]string{l_sess.WorkingDir, filepath.Base(root)}, diffs...)
-
-	remotepath := strings.Join(diffs, string(os.PathSeparator))
-
-	folder := path.Dir(remotepath)
-
-	// here we escape the path string by wrapping it in quotes, so any space characters dont bite
-	if err := sess.Run(fmt.Sprintf("mkdir -p \"%s\"; scp -t \"%s\"", folder, remotepath)); err != nil {
+	cwd, err := os.Getwd()
+	if err != nil {
 		panic("Error: " + err.Error())
 	}
 
-	return fpath
+	cwd_components := strings.Split(cwd, string(os.PathSeparator))
+
+	relative_file_path_components := local_file_path_components[len(cwd_components):]
+	relative_file_path_components = append([]string{l_sess.WorkingDir}, relative_file_path_components...)
+	
+	remote_file_path := strings.Join(relative_file_path_components, string(os.PathSeparator))
+	remote_file_path_folder := strings.Join(relative_file_path_components[:len(relative_file_path_components) - 1], string(os.PathSeparator))
+
+	// this retrieves the uploaded stream, and writes it to a file, also creating the folder path beforehand
+	if err := sess.Run(fmt.Sprintf("mkdir -p \"%s\"; scp -t \"%s\"", remote_file_path_folder, remote_file_path)); err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	return putfilepath
 }
 
-func DispatchUploads(putpath string, client *ssh.Client, putfiles []string, pbars []*pb.ProgressBar) {
-	pool, _ := pb.StartPool(pbars...)
+func BatchUpload(client *ssh.Client, putfiles []string, pbars []*pb.ProgressBar) {
+	
+	pool, err := pb.StartPool(pbars...)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
 
 	results := make(chan string)
-	for i, fl := range putfiles {
-		go func (fl string, i int) {
-			results <- PutFile(fl, putpath, client, pbars[i])
-		}(fl, i)
+	for i := 0; i < len(putfiles); i++ {
+		go func (idx int) {
+			results <- PutFile(client, putfiles[idx], pbars[idx])
+		}(i)
 	}
 
 	// wait for all uploads to finish before exiting
@@ -206,11 +218,15 @@ func PutPath(putpath string) {
 
 	var progressBars []*pb.ProgressBar
 	var putfiles []string
-	filepath.Walk(putpath, func (fpath string,  info os.FileInfo, err error) error {
+	filepath.Walk(putpath, func (fpath string, info os.FileInfo, err error) error {
+		// walk the given path and store all files in an array
 		if !info.IsDir() {
-			putfiles = append(putfiles, fpath)
-			bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES) //.Prefix("Prefix")
-			progressBars = append(progressBars, bar)
+			fAbsPath, err := filepath.Abs(fpath) // absolute paths are easier to deal with in `PutFile` func when joining paths with remote
+			if err == nil {
+				putfiles = append(putfiles, fAbsPath)
+				bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES) //.Prefix("Prefix")
+				progressBars = append(progressBars, bar)
+			}
 		}
 		return nil
 	})
@@ -221,7 +237,8 @@ func PutPath(putpath string) {
 		if max_index > len(putfiles) {
 			max_index = len(putfiles)
 		}
-		DispatchUploads(putpath, client, putfiles[i:max_index], progressBars[i:max_index])
+
+		BatchUpload(client, putfiles[i:max_index], progressBars[i:max_index])
 	}
 }
 
@@ -307,7 +324,8 @@ func AddSession(name, ip, port, user, keyPath string) {
 		KeyPath: keyPath,
 	}
 
-	if new_sess.KeyPath == "" { // keypath wasn't provided, ask for password
+	// keypath wasn't provided, ask for password
+	if new_sess.KeyPath == "" {
 		fmt.Print("Device Password: ")
 		
 		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
@@ -322,27 +340,17 @@ func AddSession(name, ip, port, user, keyPath string) {
 	applicationConfig = append(applicationConfig, new_sess)
 }
 
-func MakeLiveSession(esh_conf *ESHSessionConfig) (session *ssh.Session, err error) {	
-
-	client, err := MakeSSHClient(esh_conf)
-
-	if err != nil {
-		return
-	}
-
-	session, err = client.NewSession()
-
-	return
-}
-
-
 /// MARK: - Command line funcs
 
 func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
 	cmd := strings.Join(cmd_args, " ")
 
-	session, err := MakeLiveSession(esh_conf)
+	client, err := MakeSSHClient(esh_conf)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
 
+	session, err := client.NewSession()
 	if err != nil {
 		panic("Error: " + err.Error())
 	}
@@ -351,16 +359,15 @@ func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
 
 	var stdoutBuf bytes.Buffer
     session.Stdout = &stdoutBuf
+    session.Stderr = &stdoutBuf
     session.Run("cd " + esh_conf.WorkingDir + ";" + cmd)
 
     fmt.Print(stdoutBuf.String())
 }
 
 func ParseArgs(args []string) {
-
-	// check if theres is an `arg[1..n]` and if that arg is not one of the registered
-	// app commands, and if current session isn't nil either, then execute given
-	// command on ssh device
+	// WHAT? -> check if theres is an `arg[1..n]` and if that arg is not one of the registered
+	// app commands, and if current session isn't nil either, then execute given command on ssh device
 	if len(args) > 1 {
 		command := args[1]
 
@@ -382,41 +389,31 @@ func ParseArgs(args []string) {
 	}
 
 	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
-
-		case add.FullCommand():
-			AddSession(*addname, *serverIP, *port, *user, *keyPath)
-
-		case use.FullCommand():
-			UseSession(*usename)
-
-		case listall.FullCommand():
-			ListSavedSessions()
-
-		case logout.FullCommand():
-			LogoutCurrentSession()
-
-		case remove.FullCommand():
-			RemoveSession(*removename)
-
-		case get.FullCommand():
-			GetPath(*getpath)
-
-		case put.FullCommand():
-			PutPath(*putpath)
+		case add.FullCommand(): AddSession(*addname, *serverIP, *port, *user, *keyPath)
+		case use.FullCommand(): UseSession(*usename)
+		case listall.FullCommand(): ListSavedSessions()
+		case logout.FullCommand(): LogoutCurrentSession()
+		case remove.FullCommand(): RemoveSession(*removename)
+		case get.FullCommand(): GetPath(*getpath)
+		case put.FullCommand(): PutPath(*putpath)
 	}
 }
 
 func main() {
+
 	// support for -h flag
 	esh_cli.HelpFlag.Short('h')
 
+	// store config name
 	store.SetApplicationName("esh")
 
 	// load config, errors are ignored for now as config file may not exist on first program run
 	store.Load("config.json", &applicationConfig)
 
+	// try to make something out of the given arguments
 	ParseArgs(os.Args)
 
+	// save config before exit, and panic if save fails
 	err := store.Save("config.json", applicationConfig)
 	if err != nil {
 		panic("Error: " + err.Error())
