@@ -224,7 +224,7 @@ func PutPath(putpath string) {
 			fAbsPath, err := filepath.Abs(fpath) // absolute paths are easier to deal with in `PutFile` func when joining paths with remote
 			if err == nil {
 				putfiles = append(putfiles, fAbsPath)
-				bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES) //.Prefix("Prefix")
+				bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES).Prefix(path.Base(fpath))
 				progressBars = append(progressBars, bar)
 			}
 		}
