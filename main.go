@@ -123,6 +123,23 @@ func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
     fmt.Print(stdoutBuf.String())
 }
 
+/// MARK: Get / Put progress tracking
+
+type ProgressTracker struct{
+	Length int64
+	ProgressInt int
+	Name string
+	Progress *pb.ProgressBar
+}
+
+func (pt *ProgressTracker) Write(data []byte) (int, error) {
+	pt.ProgressInt += len(data)
+	pt.Progress.Set(pt.ProgressInt)
+	return len(data), nil
+}
+
+/// MARK: Get Funcs
+
 func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) string {
 
 	l_sess := CurrentSession()
@@ -137,7 +154,7 @@ func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) str
 		panic("Error: " + err.Error())
 	}
 
-	cprog := &UploadProgressTracker{ Length: rfileStats.Size(), Name: getfilepath, Progress: prbar }
+	cprog := &ProgressTracker{ Length: rfileStats.Size(), Name: getfilepath, Progress: prbar }
 	remote_progressbarreader := io.TeeReader(remoteFile, cprog)
 
 	remote_file_path_components := strings.Split(getfilepath, string(os.PathSeparator))
@@ -149,9 +166,15 @@ func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) str
 		panic("Error: " + err.Error())
 	}
 	write_path := strings.Join(append([]string{cwd}, relative_remote_path...), string(os.PathSeparator))
+	write_path_folder := filepath.Dir(write_path)
 
-	wrt, _ := os.Create(write_path)
-	io.Copy(wrt, remote_progressbarreader)
+	err = os.MkdirAll(write_path_folder, 0777)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	local_writer, _ := os.Create(write_path)
+	/*wrt_bts, _ :=*/ io.Copy(local_writer, remote_progressbarreader)
 
 	return getfilepath
 }
@@ -193,14 +216,14 @@ func GetPath(getpath string) {
 	}
 	defer sftp.Close()
 
-	remoteWalkingPath := strings.Join([]string {l_sess.WorkingDir, getpath}, string(os.PathSeparator))
+	remoteWalkingPath := path.Clean(strings.Join([]string {l_sess.WorkingDir, getpath}, string(os.PathSeparator)))
 
 	var progressBars []*pb.ProgressBar
 	var getfiles []string
 
 	walker := sftp.Walk(remoteWalkingPath)
 	for walker.Step() {
-		if walker.Err() != nil || walker.Stat().IsDir() {
+		if walker.Stat().IsDir() || walker.Err() != nil {
 			continue
 		}
 
@@ -209,7 +232,7 @@ func GetPath(getpath string) {
 		progressBars = append(progressBars, bar)
 	}
 
-	// batch downloads of `n`, since opening too many SSH sessions at same time, causes connection disruption
+	// batch downloads of `n`
 	for i := 0; i < len(getfiles); i = i + 3 {
 		max_index := i+3
 		if max_index > len(getfiles) {
@@ -221,19 +244,6 @@ func GetPath(getpath string) {
 }
 
 /// MARK: - PUT funcs
-
-type UploadProgressTracker struct{
-	Length int64
-	Uploaded int
-	Name string
-	Progress *pb.ProgressBar
-}
-
-func (pt *UploadProgressTracker) Write(data []byte) (int, error) {
-	pt.Uploaded += len(data)
-	pt.Progress.Set(pt.Uploaded)
-	return len(data), nil
-}
 
 func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) string {
 
@@ -254,7 +264,7 @@ func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) stri
 		panic("Error: " + err.Error())
 	}
 
-	cprog := &UploadProgressTracker{ Length: lfileStats.Size(), Name: putfilepath, Progress: prbar }
+	cprog := &ProgressTracker{ Length: lfileStats.Size(), Name: putfilepath, Progress: prbar }
 	progressbarreader := io.TeeReader(lfile, cprog)
 
 	local_file_path_components := strings.Split(putfilepath, string(os.PathSeparator))
