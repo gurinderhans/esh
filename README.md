@@ -1,5 +1,8 @@
 # esh - easy SSH
 
+### Build for macOS
+`env GOOS=darwin GOARCH=386 go build -o bin/esh -v`
+
 ```bash
 esh list-all - list all saved ssh servers
 esh add -h <host> -u <user> -p <port> --key </path/to/key> # password will be asked if no key provided
