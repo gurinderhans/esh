@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/cheggaaa/pb.v1"
+	"github.com/pkg/sftp"
 )
 
 
@@ -99,10 +100,124 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 	return
 }
 
-/// MARK: - GET funcs
+func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
+	cmd := strings.Join(cmd_args, " ")
 
-func GetPath(path string) {
-	// TODO: implement
+	client, err := MakeSSHClient(esh_conf)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	session, err := client.NewSession()
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	defer session.Close()
+
+	var stdoutBuf bytes.Buffer
+    session.Stdout = &stdoutBuf
+    session.Stderr = &stdoutBuf
+    session.Run("cd " + esh_conf.WorkingDir + ";" + cmd)
+
+    fmt.Print(stdoutBuf.String())
+}
+
+func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) string {
+
+	l_sess := CurrentSession()
+	remoteFile, err := client.Open(getfilepath)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+	defer remoteFile.Close()
+
+	rfileStats, err := remoteFile.Stat()
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	cprog := &UploadProgressTracker{ Length: rfileStats.Size(), Name: getfilepath, Progress: prbar }
+	remote_progressbarreader := io.TeeReader(remoteFile, cprog)
+
+	remote_file_path_components := strings.Split(getfilepath, string(os.PathSeparator))
+	remote_wd_components := strings.Split(l_sess.WorkingDir, string(os.PathSeparator))
+	relative_remote_path := remote_file_path_components[len(remote_wd_components) - 1:]
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+	write_path := strings.Join(append([]string{cwd}, relative_remote_path...), string(os.PathSeparator))
+
+	wrt, _ := os.Create(write_path)
+	io.Copy(wrt, remote_progressbarreader)
+
+	return getfilepath
+}
+
+func BatchDownload(client *sftp.Client, getfiles []string, pbars []*pb.ProgressBar) {
+	
+	pool, err := pb.StartPool(pbars...)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	results := make(chan string)
+	for i := 0; i < len(getfiles); i++ {
+		go func (idx int) {
+			results <- GetFile(client, getfiles[idx], pbars[idx])
+		}(i)
+	}
+
+	// wait for all uploads to finish before exiting
+	for _ = range getfiles {
+        <-results
+    }
+
+    pool.Stop()
+}
+
+func GetPath(getpath string) {
+
+	l_sess := CurrentSession()
+
+	client, err := MakeSSHClient(l_sess)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+
+	sftp, err := sftp.NewClient(client)
+	if err != nil {
+		panic("Error: " + err.Error())
+	}
+	defer sftp.Close()
+
+	remoteWalkingPath := strings.Join([]string {l_sess.WorkingDir, getpath}, string(os.PathSeparator))
+
+	var progressBars []*pb.ProgressBar
+	var getfiles []string
+
+	walker := sftp.Walk(remoteWalkingPath)
+	for walker.Step() {
+		if walker.Err() != nil || walker.Stat().IsDir() {
+			continue
+		}
+
+		getfiles = append(getfiles, walker.Path())
+		bar := pb.New(int(walker.Stat().Size())).SetUnits(pb.U_BYTES).Prefix(path.Base(walker.Path()))
+		progressBars = append(progressBars, bar)
+	}
+
+	// batch downloads of `n`, since opening too many SSH sessions at same time, causes connection disruption
+	for i := 0; i < len(getfiles); i = i + 3 {
+		max_index := i+3
+		if max_index > len(getfiles) {
+			max_index = len(getfiles)
+		}
+
+		BatchDownload(sftp, getfiles[i:max_index], progressBars[i:max_index])
+	}
 }
 
 /// MARK: - PUT funcs
@@ -144,7 +259,6 @@ func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) stri
 
 	local_file_path_components := strings.Split(putfilepath, string(os.PathSeparator))
 	local_file_name := local_file_path_components[len(local_file_path_components) - 1]
-
 
 	go func() {
 
@@ -341,29 +455,6 @@ func AddSession(name, ip, port, user, keyPath string) {
 }
 
 /// MARK: - Command line funcs
-
-func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
-	cmd := strings.Join(cmd_args, " ")
-
-	client, err := MakeSSHClient(esh_conf)
-	if err != nil {
-		panic("Error: " + err.Error())
-	}
-
-	session, err := client.NewSession()
-	if err != nil {
-		panic("Error: " + err.Error())
-	}
-
-	defer session.Close()
-
-	var stdoutBuf bytes.Buffer
-    session.Stdout = &stdoutBuf
-    session.Stderr = &stdoutBuf
-    session.Run("cd " + esh_conf.WorkingDir + ";" + cmd)
-
-    fmt.Print(stdoutBuf.String())
-}
 
 func ParseArgs(args []string) {
 	// WHAT? -> check if theres is an `arg[1..n]` and if that arg is not one of the registered
