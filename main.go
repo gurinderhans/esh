@@ -100,8 +100,7 @@ func MakeSSHClient(esh_conf *ESHSessionConfig) (client *ssh.Client, err error) {
 	return
 }
 
-func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
-	cmd := strings.Join(cmd_args, " ")
+func ExecuteCommand(cmd string, esh_conf *ESHSessionConfig) bytes.Buffer {
 
 	client, err := MakeSSHClient(esh_conf)
 	if err != nil {
@@ -120,7 +119,7 @@ func ExecuteCommand(cmd_args []string, esh_conf *ESHSessionConfig) {
     session.Stderr = &stdoutBuf
     session.Run("cd " + esh_conf.WorkingDir + ";" + cmd)
 
-    fmt.Print(stdoutBuf.String())
+    return stdoutBuf
 }
 
 /// MARK: Get / Put progress tracking
@@ -174,7 +173,7 @@ func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) str
 	}
 
 	local_writer, _ := os.Create(write_path)
-	/*wrt_bts, _ :=*/ io.Copy(local_writer, remote_progressbarreader)
+	io.Copy(local_writer, remote_progressbarreader)
 
 	return getfilepath
 }
@@ -317,7 +316,6 @@ func BatchUpload(client *ssh.Client, putfiles []string, pbars []*pb.ProgressBar)
 		panic("Error: " + err.Error())
 	}
 
-
 	results := make(chan string)
 	for i := 0; i < len(putfiles); i++ {
 		go func (idx int) {
@@ -396,13 +394,11 @@ func ChangeSessionDir(toDir string) {
 		prevPath = "/"
 	}
 	
-	sess.WorkingDir = path.Join(prevPath, toDir)
+	sess.WorkingDir = filepath.Clean(path.Join(prevPath, toDir))
 }
 
 func ListSavedSessions() {
-	
 	current_sess := CurrentSession()
-
 	for i, val := range applicationConfig {
 		print_str := fmt.Sprintf("%d - %s", (i+1), val.Name)
 		if current_sess != nil && current_sess.Name == val.Name {
@@ -446,6 +442,7 @@ func AddSession(name, ip, port, user, keyPath string) {
 		Port: port,
 		Username: user,
 		KeyPath: keyPath,
+		WorkingDir: "/",
 	}
 
 	// keypath wasn't provided, ask for password
@@ -480,7 +477,9 @@ func ParseArgs(args []string) {
 				if command == "cd" {
 					ChangeSessionDir(args[2])
 				} else {
-					ExecuteCommand(args[1:], current_sess)
+					cmd := strings.Join(args[1:], " ")
+					out := ExecuteCommand(cmd, current_sess)
+					fmt.Print(out.String())
 				}
 			} else {
 				fmt.Println("Switch to a session first.")
