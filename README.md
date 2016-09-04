@@ -1,13 +1,11 @@
 # esh - easy SSH
 
 ### Build for macOS
-Create a docker container for build env
+#### Using Docker
 
-```docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash```
-
-Build the app
-
-`env GOOS=darwin GOARCH=386 go build -o bin/esh -v`
+- ```docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash```
+- `go get`
+- `env GOOS=darwin GOARCH=386 go build -o bin/esh -v`
 
 ```bash
 esh list-all - list all saved ssh servers
