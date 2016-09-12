@@ -7,18 +7,37 @@
 - `go get`
 - `env GOOS=darwin GOARCH=386 go build -o bin/esh -v`
 
+
 ```bash
-esh list-all - list all saved ssh servers
-esh add -h <host> -u <user> -p <port> --key </path/to/key> # password will be asked if no key provided
+usage: esh [<flags>] <command> [<args> ...]
 
-esh use <name> - use this session
-esh ls
-esh pwd
+easy SSH
 
-#cheap way of downloading a single file
-esh cat file.ext > file.ext
-
-# SCP stuff
-esh get <file|folder> // fetches into current local working dir
-esh put <local_file|local_folder> <online_dir>
+Flags:
+  -h, --help  Show context-sensitive help (also try --help-long and --help-man).
 ```
+###Commands:
+
+###help \<command\>
+Shows help for the specified command.
+
+###add --name=NAME --server=127.0.0.1 --user=USER [<flags>]
+Adds a SSH session to config.
+
+###use <name>
+Use a specific ssh session.
+
+###list-all
+List all saved SSH sessions.
+
+###logout
+Logout from current session.
+
+###remove <name>
+Remove a given session with name.
+
+###get <getpath>
+Get some file or folder.
+
+###put <putpath>
+Put some file or folder.
