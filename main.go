@@ -30,6 +30,15 @@ type ESHSessionConfig struct {
 	WorkingDir string
 }
 
+type ProgressTracker struct{
+	Length int64
+	ProgressInt int
+	Name string
+	Progress *pb.ProgressBar
+}
+
+var applicationConfig []*ESHSessionConfig // array holding saved sessions
+
 
 var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
@@ -67,9 +76,6 @@ var (
 	putpath		= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
-
-var applicationConfig []*ESHSessionConfig // array holding saved sessions
-
 
 /// MARK: - Core funcs
 
@@ -123,13 +129,6 @@ func ExecuteCommand(cmd string, esh_conf *ESHSessionConfig) bytes.Buffer {
 }
 
 /// MARK: Get / Put progress tracking
-
-type ProgressTracker struct{
-	Length int64
-	ProgressInt int
-	Name string
-	Progress *pb.ProgressBar
-}
 
 func (pt *ProgressTracker) Write(data []byte) (int, error) {
 	pt.ProgressInt += len(data)
