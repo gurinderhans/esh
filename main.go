@@ -35,16 +35,16 @@ var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
 
 	/// ----
-	add 		= esh_cli.Command("add", "Adds a SSH session to config.")
-	addname		= add.Flag("name", "Name of session.").Required().String() 
-	serverIP 	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
-	user 		= add.Flag("user", "Username to connect with.").Short('u').Required().String()
-	port 		= add.Flag("port", "Port to connect to.").Short('p').Default("22").String()
-	keyPath 	= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
+	add		= esh_cli.Command("add", "Adds a SSH session to config.")
+	addname		= add.Flag("name", "Name of session.").Required().String()
+	serverIP	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
+	user		= add.Flag("user", "Username to connect with.").Short('u').Required().String()
+	port		= add.Flag("port", "Port to connect to.").Short('p').Default("22").String()
+	KeyPath		= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
 
 	/// -----
-	use 		= esh_cli.Command("use", "Use a specific ssh session")
-	usename 	= use.Arg("name", "Name of session.").Required().String()
+	use		= esh_cli.Command("use", "Use a specific ssh session")
+	usename		= use.Arg("name", "Name of session.").Required().String()
 
 	/// ----
 	listall		= esh_cli.Command("list-all", "List all saved SSH sessions.")
@@ -54,7 +54,7 @@ var (
 
 	/// ----
 	remove		= esh_cli.Command("remove", "Remove a given session with name.")
-	removename 	= remove.Arg("name", "Name of session to remove.").Required().String()
+	removename	= remove.Arg("name", "Name of session to remove.").Required().String()
 
 
 	/// ----
@@ -63,8 +63,8 @@ var (
 
 
 	/// ----
-	put			= esh_cli.Command("put", "Put some file or folder.")
-	putpath 	= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
+	put		= esh_cli.Command("put", "Put some file or folder.")
+	putpath		= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
 
@@ -179,7 +179,6 @@ func GetFile(client *sftp.Client, getfilepath string, prbar *pb.ProgressBar) str
 }
 
 func BatchDownload(client *sftp.Client, getfiles []string, pbars []*pb.ProgressBar) {
-	
 	pool, err := pb.StartPool(pbars...)
 	if err != nil {
 		panic("Error: " + err.Error())
@@ -287,7 +286,7 @@ func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) stri
 
 	// since local and remote paths differ and we're not really given a remote path by user,
 	// we compute the remote path here which is the current working directory on remote
-	
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		panic("Error: " + err.Error())
@@ -297,7 +296,7 @@ func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) stri
 
 	relative_file_path_components := local_file_path_components[len(cwd_components):]
 	relative_file_path_components = append([]string{l_sess.WorkingDir}, relative_file_path_components...)
-	
+
 	remote_file_path := strings.Join(relative_file_path_components, string(os.PathSeparator))
 	remote_file_path_folder := strings.Join(relative_file_path_components[:len(relative_file_path_components) - 1], string(os.PathSeparator))
 
@@ -310,7 +309,7 @@ func PutFile(client *ssh.Client, putfilepath string, prbar *pb.ProgressBar) stri
 }
 
 func BatchUpload(client *ssh.Client, putfiles []string, pbars []*pb.ProgressBar) {
-	
+
 	pool, err := pb.StartPool(pbars...)
 	if err != nil {
 		panic("Error: " + err.Error())
@@ -388,12 +387,12 @@ func UseSession(sessionName string) {
 
 func ChangeSessionDir(toDir string) {
 	sess := CurrentSession()
-	
+
 	prevPath := sess.WorkingDir
 	if string(toDir[0]) == "/" {
 		prevPath = "/"
 	}
-	
+
 	sess.WorkingDir = filepath.Clean(path.Join(prevPath, toDir))
 }
 
@@ -448,7 +447,7 @@ func AddSession(name, ip, port, user, keyPath string) {
 	// keypath wasn't provided, ask for password
 	if new_sess.KeyPath == "" {
 		fmt.Print("Device Password: ")
-		
+
 		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			panic("Error: " + err.Error())
