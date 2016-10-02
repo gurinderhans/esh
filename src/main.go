@@ -13,27 +13,9 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
-	"gopkg.in/cheggaaa/pb.v1"
 )
 
 
-type ESHSessionConfig struct {
-	Name string
-	Hostname string
-	Port string
-	Username string
-	Password string
-	KeyPath string
-	IsCurrentSession bool
-	WorkingDir string
-}
-
-type ProgressTracker struct{
-	Length int64
-	ProgressInt int
-	Name string
-	Progress *pb.ProgressBar
-}
 
 var applicationConfig []*ESHSessionConfig // array holding saved sessions
 
@@ -42,7 +24,7 @@ var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
 
 	/// ----
-	add		= esh_cli.Command("add", "Adds a SSH session to config.")
+	add			= esh_cli.Command("add", "Adds a SSH session to config.")
 	addname		= add.Flag("name", "Name of session.").Required().String()
 	serverIP	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
 	user		= add.Flag("user", "Username to connect with.").Short('u').Required().String()
@@ -50,7 +32,7 @@ var (
 	keyPath		= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
 
 	/// -----
-	use		= esh_cli.Command("use", "Use a specific ssh session")
+	use			= esh_cli.Command("use", "Use a specific ssh session")
 	usename		= use.Arg("name", "Name of session.").Required().String()
 
 	/// ----
@@ -70,7 +52,7 @@ var (
 
 
 	/// ----
-	put		= esh_cli.Command("put", "Put some file or folder.")
+	put			= esh_cli.Command("put", "Put some file or folder.")
 	putpath		= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
