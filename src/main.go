@@ -120,12 +120,11 @@ func ParseArgs(args []string) {
 	if len(args) > 1 {
 		command := args[1]
 
-
 		for _, _cmd := range reservedCommands {
 			if command != _cmd {
 				current_sess := CurrentSession()
 				if current_sess != nil {
-					// special case for `cd` command
+					// special case for `cd` command, basically we locally cd just to save server round-trip time
 					if command == "cd" {
 						ChangeSessionDir(args[2])
 					} else {
