@@ -49,7 +49,7 @@ var (
 	serverIP	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
 	user		= add.Flag("user", "Username to connect with.").Short('u').Required().String()
 	port		= add.Flag("port", "Port to connect to.").Short('p').Default("22").String()
-	KeyPath		= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
+	keyPath		= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
 
 	/// -----
 	use		= esh_cli.Command("use", "Use a specific ssh session")
