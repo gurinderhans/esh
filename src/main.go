@@ -19,7 +19,7 @@ var applicationConfig []*ESHSessionConfig // array holding saved sessions
 var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
 
-	/// ----
+	/// command and args for adding new ssh device
 	add			= esh_cli.Command("add", "Adds a SSH session to config.")
 	addname		= add.Flag("name", "Name of session.").Required().String()
 	serverIP	= add.Flag("server", "Server address.").Short('s').Required().PlaceHolder("127.0.0.1").String()
@@ -27,27 +27,27 @@ var (
 	port		= add.Flag("port", "Port to connect to.").Short('p').Default("22").String()
 	keyPath		= add.Flag("key", "Path to key.").PlaceHolder("/path/to/key").String()
 
-	/// -----
+	/// command and args for switching to a ssh connection
 	use			= esh_cli.Command("use", "Use a specific ssh session")
 	usename		= use.Arg("name", "Name of session.").Required().String()
 
-	/// ----
+	/// command for listing all ssh sessions
 	listall		= esh_cli.Command("list-all", "List all saved SSH sessions.")
 
-	/// ----
+	/// command for logging out of ssh session
 	logout		= esh_cli.Command("logout", "Logout from current session.")
 
-	/// ----
+	/// command and args for removing a ssh device
 	remove		= esh_cli.Command("remove", "Remove a given session with name.")
 	removename	= remove.Arg("name", "Name of session to remove.").Required().String()
 
 
-	/// ----
+	/// command and args for downloading a file/folder
 	get			= esh_cli.Command("get", "Get some file or folder.")
 	getpath		= get.Arg("getpath", "Path of file | folder to download.").Required().String()
 
 
-	/// ----
+	/// command and args for uploading a file/folder
 	put			= esh_cli.Command("put", "Put some file or folder.")
 	putpath		= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
@@ -115,7 +115,7 @@ func ExecuteCommand(cmd string, esh_conf *ESHSessionConfig) bytes.Buffer {
 /// MARK: - Command line funcs
 
 func ParseArgs(args []string) {
-	// WHAT? -> check if theres is an `arg[1..n]` and if that arg is not one of the registered
+	// WHAT? -> check if theres is an `arg[1..n]` and if that arg is not one of the reservedCommands
 	// app commands, and if current session isn't nil either, then execute given command on ssh device
 	if len(args) > 1 {
 		command := args[1]
