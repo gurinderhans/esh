@@ -12,8 +12,9 @@ import (
 )
 
 
-var applicationConfig []*ESHSessionConfig // array holding saved sessions
+var reservedCommands = [...]string {"list-all", "use", "add", "logout", "remove", "get", "put", "help", "--help", "-h"}
 
+var applicationConfig []*ESHSessionConfig // array holding saved sessions
 
 var (
 	esh_cli		= kingpin.New("esh", "easy SSH")
@@ -119,39 +120,56 @@ func ParseArgs(args []string) {
 	if len(args) > 1 {
 		command := args[1]
 
-		/// TODO: better way to do this?
-		if command != "list-all" && command != "use" && command != "add" && command != "logout" && command != "remove" && command != "get" && command != "put" && command != "help" && command != "--help" && command != "-h" {
-			current_sess := CurrentSession()
-			if current_sess != nil {
-				// special case for 'cd' command
-				if command == "cd" {
-					ChangeSessionDir(args[2])
+
+		for _, _cmd := range reservedCommands {
+			if command != _cmd {
+				current_sess := CurrentSession()
+				if current_sess != nil {
+					// special case for `cd` command
+					if command == "cd" {
+						ChangeSessionDir(args[2])
+					} else {
+						cmd := strings.Join(args[1:], " ")
+						out := ExecuteCommand(cmd, current_sess)
+						fmt.Print(out.String())
+					}
 				} else {
-					cmd := strings.Join(args[1:], " ")
-					out := ExecuteCommand(cmd, current_sess)
-					fmt.Print(out.String())
+					fmt.Println("No valid session found, try switching to one first.")
 				}
-			} else {
-				fmt.Println("Switch to a session first.")
+
+				return
 			}
-			return
 		}
 	}
 
 	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
-		case add.FullCommand(): AddSession(*addname, *serverIP, *port, *user, *keyPath)
-		case use.FullCommand(): UseSession(*usename)
-		case listall.FullCommand(): ListSavedSessions()
-		case logout.FullCommand(): LogoutCurrentSession()
-		case remove.FullCommand(): RemoveSession(*removename)
-		case get.FullCommand(): GetPath(*getpath)
-		case put.FullCommand(): PutPath(*putpath)
+
+		case add.FullCommand():
+			AddSession(*addname, *serverIP, *port, *user, *keyPath)
+
+		case use.FullCommand():
+			UseSession(*usename)
+
+		case listall.FullCommand():
+			ListSavedSessions()
+
+		case logout.FullCommand():
+			LogoutCurrentSession()
+
+		case remove.FullCommand():
+			RemoveSession(*removename)
+
+		case get.FullCommand():
+			GetPath(*getpath)
+
+		case put.FullCommand():
+			PutPath(*putpath)
 	}
 }
 
 func main() {
 
-	// support for -h flag
+	// add support for -h flag
 	esh_cli.HelpFlag.Short('h')
 
 	// store config name
@@ -166,6 +184,7 @@ func main() {
 	// save config before exit, and panic if save fails
 	err := store.Save("config.json", applicationConfig)
 	if err != nil {
+		panic("Unable to save config before exiting. Please report the error below.")
 		panic("Error: " + err.Error())
 	}
 }
