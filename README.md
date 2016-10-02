@@ -7,7 +7,7 @@
 - `go get`
 - `env GOOS=darwin GOARCH=386 go build -o bin/esh -v`
 
-env GOOS=darwin GOARCH=386 go build -o bin/esh -v main.go upload.go download.go 
+env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
 
 ```bash
 usage: esh [<flags>] <command> [<args> ...]

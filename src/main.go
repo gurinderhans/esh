@@ -5,16 +5,11 @@ import (
 	"io/ioutil"
 	"fmt"
 	"bytes"
-	"path"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"github.com/tucnak/store"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
-
 
 
 var applicationConfig []*ESHSessionConfig // array holding saved sessions
@@ -56,6 +51,14 @@ var (
 	putpath		= put.Arg("putpath", "Path fo file | folder to upload.").Required().String()
 
 )
+
+/// MARK: Get / Put progress tracking
+
+func (pt *ProgressTracker) Write(data []byte) (int, error) {
+	pt.ProgressInt += len(data)
+	pt.Progress.Set(pt.ProgressInt)
+	return len(data), nil
+}
 
 /// MARK: - Core funcs
 
@@ -106,110 +109,6 @@ func ExecuteCommand(cmd string, esh_conf *ESHSessionConfig) bytes.Buffer {
     session.Run("cd " + esh_conf.WorkingDir + ";" + cmd)
 
     return stdoutBuf
-}
-
-/// MARK: Get / Put progress tracking
-
-func (pt *ProgressTracker) Write(data []byte) (int, error) {
-	pt.ProgressInt += len(data)
-	pt.Progress.Set(pt.ProgressInt)
-	return len(data), nil
-}
-
-/// MARK: - Session management funcs
-
-func CurrentSession() (*ESHSessionConfig) {
-	for _, val := range applicationConfig {
-		if val.IsCurrentSession == true {
-			return val
-		}
-	}
-	return nil
-}
-
-func UseSession(sessionName string) {
-	for _, val := range applicationConfig {
-		if val.Name == sessionName {
-			val.IsCurrentSession = true
-		} else {
-			val.IsCurrentSession = false
-		}
-	}
-}
-
-func ChangeSessionDir(toDir string) {
-	sess := CurrentSession()
-
-	prevPath := sess.WorkingDir
-	if string(toDir[0]) == "/" {
-		prevPath = "/"
-	}
-
-	sess.WorkingDir = filepath.Clean(path.Join(prevPath, toDir))
-}
-
-func ListSavedSessions() {
-	current_sess := CurrentSession()
-	for i, val := range applicationConfig {
-		print_str := fmt.Sprintf("%d - %s", (i+1), val.Name)
-		if current_sess != nil && current_sess.Name == val.Name {
-			print_str = print_str + " " + "*"
-		}
-		fmt.Println(print_str)
-	}
-}
-
-func LogoutCurrentSession() {
-	for _, val := range applicationConfig {
-		val.IsCurrentSession = false
-	}
-}
-
-func RemoveSession(name string) {
-	var deleteIndex int
-	for i, val := range applicationConfig {
-		if val.Name == name {
-			deleteIndex = i
-			break
-		}
-	}
-
-	applicationConfig = append(applicationConfig[:deleteIndex], applicationConfig[deleteIndex+1:]...)
-}
-
-func AddSession(name, ip, port, user, keyPath string) {
-
-	// pre-check if session already exists
-	for _, val := range applicationConfig {
-		if val.Name == name && val.Hostname == ip && val.Username == user {
-			fmt.Println("Session already in config.")
-			return
-		}
-	}
-
-	new_sess := &ESHSessionConfig {
-		Name: name,
-		Hostname: ip,
-		Port: port,
-		Username: user,
-		KeyPath: keyPath,
-		WorkingDir: "/",
-	}
-
-	// keypath wasn't provided, ask for password
-	if new_sess.KeyPath == "" {
-		fmt.Print("Device Password: ")
-
-		bytePassword, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			panic("Error: " + err.Error())
-		}
-
-		fmt.Println()
-		new_sess.Password = string(bytePassword)
-	}
-
-	applicationConfig = append(applicationConfig, new_sess)
 }
 
 /// MARK: - Command line funcs
