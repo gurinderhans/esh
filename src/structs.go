@@ -19,3 +19,4 @@ type ProgressTracker struct{
 	Name string
 	Progress *pb.ProgressBar
 }
+

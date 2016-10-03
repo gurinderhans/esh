@@ -12,7 +12,7 @@ import (
 )
 
 
-var reservedCommands = [...]string {"list-all", "use", "add", "logout", "remove", "get", "put", "help", "--help", "-h"}
+var reservedCommands = []string {"list-all", "use", "add", "logout", "remove", "get", "put", "help", "--help", "-h"}
 
 var applicationConfig []*ESHSessionConfig // array holding saved sessions
 
@@ -115,30 +115,30 @@ func ExecuteCommand(cmd string, esh_conf *ESHSessionConfig) bytes.Buffer {
 /// MARK: - Command line funcs
 
 func ParseArgs(args []string) {
-	// WHAT? -> check if theres is an `arg[1..n]` and if that arg is not one of the reservedCommands
-	// app commands, and if current session isn't nil either, then execute given command on ssh device
-	if len(args) > 1 {
-		command := args[1]
 
-		for _, _cmd := range reservedCommands {
-			if command != _cmd {
-				current_sess := CurrentSession()
-				if current_sess != nil {
-					// special case for `cd` command, basically we locally cd just to save server round-trip time
-					if command == "cd" {
-						ChangeSessionDir(args[2])
-					} else {
-						cmd := strings.Join(args[1:], " ")
-						out := ExecuteCommand(cmd, current_sess)
-						fmt.Print(out.String())
-					}
-				} else {
-					fmt.Println("No valid session found, try switching to one first.")
-				}
+	if len(args) == 0 {
+		return
+	}
 
-				return
+	command := args[1]
+
+	if IndexOf(command, reservedCommands) == -1 {
+		// not a reserved command
+		current_sess := CurrentSession()
+		if current_sess != nil {
+
+			// special case for `cd` command, here we locally `cd` to save on server round trip time
+			if command == "cd" {
+				ChangeSessionDir(args[2])
+			} else {
+				cmd := strings.Join(args[1:], " ")
+				out := ExecuteCommand(cmd, current_sess)
+				fmt.Print(out.String())
 			}
+		} else {
+			fmt.Println("No valid session found, try switching to one first.")
 		}
+		return
 	}
 
 	switch kingpin.MustParse(esh_cli.Parse(os.Args[1:])) {
@@ -163,6 +163,10 @@ func ParseArgs(args []string) {
 
 		case put.FullCommand():
 			PutPath(*putpath)
+
+		default:
+			// kingpin does not allow us to use default case for our own cases
+			break
 	}
 }
 
@@ -184,6 +188,6 @@ func main() {
 	err := store.Save("config.json", applicationConfig)
 	if err != nil {
 		panic("Unable to save config before exiting. Please report the error below.")
-		panic("Error: " + err.Error())
+		panic(err.Error())
 	}
 }

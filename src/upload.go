@@ -107,15 +107,13 @@ func PutPath(putpath string) {
 		panic("Error: " + err.Error())
 	}
 
-	// TODO: ideally we should use something like a pair to store pointer along with the file path
 	var progressBars []*pb.ProgressBar
-	var putfiles []string
+	var putFiles []string
 	filepath.Walk(putpath, func (fpath string, info os.FileInfo, err error) error {
-		// walk the given path and store all files in an array
 		if !info.IsDir() {
-			fAbsPath, err := filepath.Abs(fpath) // absolute paths are easier to deal with in `PutFile` func when joining paths with remote
+			absPath, err := filepath.Abs(fpath) // absolute paths are easier to deal with in `PutFile` func when joining paths with remote
 			if err == nil {
-				putfiles = append(putfiles, fAbsPath)
+				putFiles = append(putFiles, absPath)
 				bar := pb.New(int(info.Size())).SetUnits(pb.U_BYTES).Prefix(path.Base(fpath))
 				progressBars = append(progressBars, bar) // store a pointer to the progress bar which is one per file
 			}
@@ -124,13 +122,13 @@ func PutPath(putpath string) {
 	})
 
 	// batch uploads of `n`, since opening too many SSH sessions at same time, causes connection disruption
-	for i := 0; i < len(putfiles); i = i + 3 {
+	for i := 0; i < len(putFiles); i = i + 3 {
 		max_index := i+3
-		if max_index > len(putfiles) {
-			max_index = len(putfiles)
+		if max_index > len(putFiles) {
+			max_index = len(putFiles)
 		}
 
-		BatchUpload(client, putfiles[i:max_index], progressBars[i:max_index])
+		BatchUpload(client, putFiles[i:max_index], progressBars[i:max_index])
 	}
 }
 
