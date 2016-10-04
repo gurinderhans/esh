@@ -1,14 +1,6 @@
 # esh - easy SSH
-### usage: esh [\<flags\>] \<command\> [\<args\> ...]
-#### Build using Docker
 
-```
-cd $PROJECT_ROOT/src
-docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash
-# In docker shell now...
-go get
-env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
-```
+### usage: esh [\<flags\>] \<command\> [\<args\> ...]
 
 ## Flags:
 ### -h, --help
@@ -39,3 +31,14 @@ Get some file or folder.
 
 ### put \<putpath\>
 Put some file or folder.
+
+
+# Build
+### With Docker
+```
+cd $PROJECT_ROOT/src
+docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash
+# In docker shell now...
+go get
+env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
+```
