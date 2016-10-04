@@ -42,3 +42,10 @@ docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash
 go get
 env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
 ```
+
+# future.print()
+### TODOs & Features:
+1. Fix any bugs, there are a few, ex. we get crashes if we try to upload/download files that don't exist
+2. Optimize download and upload code to transfer files faster.
+3. Create a maybe seperate background daemon program that keeps ssh connections alive and another main program that will use the 'open' ssh connections there to contact server/device just to speed the commands speed. Really unsure if this will add speed ???
+4. This one would be amazing. Have a way to do like `esh vim /some/remote/path/to/file` and it would open a `vim` buffer locally where saves would automatically save the file on the server, and behind the scenes, we'll be doing fetching and putting of the file between our device and server
