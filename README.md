@@ -1,44 +1,41 @@
 # esh - easy SSH
-
+### usage: esh [\<flags\>] \<command\> [\<args\> ...]
 #### Build using Docker
 
 ```
 cd $PROJECT_ROOT/src
 docker run -it --rm -v `pwd`:/go/src/esh -w /go/src/esh golang bash
+# In docker shell now...
 go get
 env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
 ```
 
-```bash
-usage: esh [<flags>] <command> [<args> ...]
+## Flags:
+### -h, --help
+Show context-sensitive help (also try --help-long and --help-man).
 
-easy SSH
+## Commands:
 
-Flags:
-  -h, --help  Show context-sensitive help (also try --help-long and --help-man).
-```
-###Commands:
-
-###help \<command\>
+### help \<command\>
 Shows help for the specified command.
 
-###add --name=NAME --server=127.0.0.1 --user=USER [<flags>]
+### add --name=NAME --server=127.0.0.1 --user=USER [\<flags\>]
 Adds a SSH session to config.
 
-###use <name>
+### use \<name\>
 Use a specific ssh session.
 
-###list-all
+### list-all
 List all saved SSH sessions.
 
-###logout
+### logout
 Logout from current session.
 
-###remove <name>
+### remove \<name\>
 Remove a given session with name.
 
-###get <getpath>
+### get \<getpath\>
 Get some file or folder.
 
-###put <putpath>
+### put \<putpath\>
 Put some file or folder.
