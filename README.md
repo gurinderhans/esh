@@ -33,7 +33,7 @@ Get some file or folder.
 Put some file or folder.
 
 
-# Build
+# build()
 ### With Docker
 ```
 cd $PROJECT_ROOT/src
