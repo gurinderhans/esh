@@ -1,6 +1,7 @@
 # esh - easy SSH
+#### usage: esh [\<flags\>] \<command\> [\<args\> ...]
 
-### usage: esh [\<flags\>] \<command\> [\<args\> ...]
+<img src="assets/esh.gif" alt="1" width=500>
 
 ## Flags:
 ### -h, --help
