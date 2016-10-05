@@ -1,6 +1,6 @@
 # esh - easy SSH
 
-With **esh** you can interact with a remote machine without opening an interactive shell.
+Using **esh** you can interact with a remote machine without opening an interactive shell.
 
 **esh** runs your command on remote machine by reading `args` and prints the `stdout` and `stderr`
 
