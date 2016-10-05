@@ -1,4 +1,9 @@
 # esh - easy SSH
+
+With **esh** you can interact with a remote machine without opening an interactive shell.
+
+**esh** runs your command on remote machine by reading `args` and prints the `stdout` and `stderr`
+
 #### usage: esh [\<flags\>] \<command\> [\<args\> ...]
 
 <img src="assets/esh.gif" alt="1" width=500>
