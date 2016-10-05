@@ -4,7 +4,7 @@ With **esh** you can interact with a remote machine without opening an interacti
 
 **esh** runs your command on remote machine by reading `args` and prints the `stdout` and `stderr`
 
-## Demo
+# Preview
 <img src="assets/esh.gif" alt="1" width=500>
 
 # usage: esh [\<flags\>] \<command\> [\<args\> ...]
