@@ -2,9 +2,9 @@
 
 ### Any feedback, pull requests, etc are welcome!
 
-Using **esh** you can interact with a remote machine without opening an interactive shell.
+Using **esh** you can interact with a remote machine without opening an interactive shell. Users can run commands on a remote machine without the need to ssh into the remote machine, it stays running in the background to keep the connection open.
 
-**esh** runs your command on remote machine by reading your `args` and printing back `stdout` and `stderr`
+**esh** runs your command on a remote machine by reading your `args` and printing back `stdout` and `stderr`
 
 # Preview
 <img src="assets/esh.gif" alt="1" width=500>
@@ -29,10 +29,10 @@ Use a specific ssh session.
 List all saved SSH sessions.
 
 ### logout
-Logout from current session.
+Logout from the current session.
 
 ### remove \<name\>
-Remove a given session with name.
+Remove a given session using a name.
 
 ### get \<getpath\>
 Get some file or folder.
@@ -52,10 +52,16 @@ env GOOS=darwin GOARCH=386 go build -o ../bin/esh -v *.go
 ```
 
 # future.print()
-### TODOs & Features:
-1. Fix any bugs, there are a few, ex. we get crashes if we try to upload/download files that don't exist (https://github.com/gurinderhans/esh/issues/1)
+### TODOs (Bugs & Potential Features):
+1. Fix any bugs, there are a few. The following is an example:
+  - we get crashes if we try to upload/download files that don't exist (https://github.com/gurinderhans/esh/issues/1)
+
 2. Optimize download and upload code to transfer files faster.
-  - Download is waaaay slower than upload, culprit seems to be the `sftp` library being used. If we are to remove it, maybe the way to download a file can be to open a reverse SSH connection and then do a upload from server to computer?? Is this possible?
-3. Create a maybe seperate background daemon program that keeps ssh connections alive and another main program that will use the 'open' ssh connections there to contact server/device just to speed the commands speed. Really unsure if this will add speed ???
-4. This one would be amazing. Have a way to do like `esh vim /some/remote/path/to/file` and it would open a `vim` buffer locally where saves would automatically save the file on the server, and behind the scenes, we'll be doing fetching and putting of the file between our device and server
-5. Also open to other directions and suggestions
+  - Using the `sftp` library has made the download speed exponentially slower than the upload speed. Downloading by opening a reverse SSH connection and then uploading from the server to the computer maybe be a potential solution, needs to be explored.
+  
+3. One way of potentially increasing the speed might be to create a separate background daemon program that keeps ssh connections alive and another main program that uses the 'open' ssh connections there to contact server/device. The effect is uncertain and needs to be tested before implementing.
+
+4. Opening a `vim` on the local buffer and syncing it with the server so that the files are automatically saved in the server. This would involve fetching and putting of the file between the device and server behind the scenes. For e.g.
+  - `esh vim /some/remote/path/to/file`
+
+5. Open to other directions and suggestions.
