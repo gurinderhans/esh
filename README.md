@@ -2,7 +2,7 @@
 
 ### Any feedback, pull requests, etc are welcome!
 
-Using **esh** you can interact with a remote machine without opening an interactive shell.
+Using **esh** you can interact with a remote machine without opening an interactive shell. Users can run commands on a remote machine without the need to ssh into the remote machine, it stays running in the background to keep the connection open.
 
 **esh** runs your command on a remote machine by reading your `args` and printing back `stdout` and `stderr`
 
